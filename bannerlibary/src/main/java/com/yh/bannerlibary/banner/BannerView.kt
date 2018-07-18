@@ -6,14 +6,14 @@ package com.yh.bannerlibary.banner
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
+import android.support.annotation.LayoutRes
 import android.support.annotation.RequiresApi
 import android.support.constraint.ConstraintLayout
 import android.support.v7.widget.LinearLayoutManager
-import android.support.v7.widget.RecyclerView
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
-import com.chad.library.adapter.base.BaseQuickAdapter
 import com.yh.bannerlibary.R
 import com.yh.bannerlibary.indicator.MagicIndicator
 import com.yh.bannerlibary.indicator.buildins.navigator.ScaleCircleNavigator
@@ -24,11 +24,11 @@ import com.yh.bannerlibary.recyclerviewpager.RecyclerViewPager
  * Created by Clistery on 18-7-11.
  */
 
-class BannerView : FrameLayout {
-
-    private val mDuration: Long = 2700
+class BannerView<Adapter : AbsBannerAdapter<*, *>> : FrameLayout {
+    private val sTAG: String = "BannerView"
 
     private val mCtx: Context
+    private var mDuration = 2700L
 
     constructor(context: Context) : this(context, null)
 
@@ -45,26 +45,24 @@ class BannerView : FrameLayout {
         init()
     }
 
-    private lateinit var mBannerView: ConstraintLayout
-
     private lateinit var mBannerViewPager: LoopRecyclerViewPager
-    private var mBannerClickListener: BaseQuickAdapter.OnItemChildClickListener? = null
-    private val mBannerData: ArrayList<BannerInfo> = ArrayList()
+    private var mAdapter: Adapter? = null
 
     private lateinit var mBannerIndicator: MagicIndicator
     private lateinit var mScaleCircleNavigator: ScaleCircleNavigator
 
-    private val mLoopRunnable = object : Runnable {
-        override fun run() {
-            mBannerViewPager.smoothScrollToPosition(mBannerViewPager.currentPosition + 1)
-            this@BannerView.postDelayed(this, mDuration)
-        }
+    @LayoutRes
+    private var mDefaultItemLayout = R.layout.item_banner
+
+    private val mLoopRunnable = Runnable {
+        mBannerViewPager.smoothScrollToPosition(mBannerViewPager.currentPosition + 1)
+        play()
     }
 
     private fun init() {
-        mBannerView = View.inflate(mCtx, R.layout.layout_banner, null) as ConstraintLayout
-        mBannerViewPager = mBannerView.findViewById(R.id.banner_viewpager)
-        mBannerIndicator = mBannerView.findViewById(R.id.banner_indicator)
+        var bannerView = View.inflate(mCtx, R.layout.layout_banner, null) as ConstraintLayout
+        mBannerViewPager = bannerView.findViewById(R.id.banner_viewpager)
+        mBannerIndicator = bannerView.findViewById(R.id.banner_indicator)
 
         mBannerViewPager.flingFactor = 0f
         mBannerViewPager.layoutManager = LinearLayoutManager(mCtx, LinearLayoutManager.HORIZONTAL, false)
@@ -76,7 +74,7 @@ class BannerView : FrameLayout {
         mScaleCircleNavigator.setSelectedCircleColor(Color.DKGRAY)
         mBannerIndicator.navigator = mScaleCircleNavigator
         bind()
-        addView(mBannerView)
+        addView(bannerView)
     }
 
     private fun bind() {
@@ -92,36 +90,40 @@ class BannerView : FrameLayout {
         })
     }
 
-    fun setData(data: ArrayList<BannerInfo>) {
-        mBannerData.clear()
-        mBannerData.addAll(data)
-        mScaleCircleNavigator.setCircleCount(mBannerData.size)
+    fun setItemLayout(@LayoutRes itemLayout: Int) {
+        mDefaultItemLayout = itemLayout
+    }
+
+    fun setBannerDuration(duration: Long) {
+        mDuration = duration
+    }
+
+    fun bindAdapter(adapter: Adapter) {
+        mAdapter = adapter
+        mAdapter!!.setItemLayout(mDefaultItemLayout)
+        updateIndicator()
+        mAdapter!!.bindToRecyclerView(mBannerViewPager)
+        play()
+    }
+
+    fun updateIndicator() {
+        mScaleCircleNavigator.setCircleCount(mAdapter!!.getData().size)
         mScaleCircleNavigator.notifyDataSetChanged()
-        val adapter = BannerAdapter(mCtx, mBannerData, mBannerViewPager)
-        mBannerViewPager.adapter = adapter
-        internalSetClickListener(adapter)
-        if (!mBannerData.isEmpty()) {
+    }
+
+    fun play() {
+        Log.d(sTAG, "play")
+        if (null != mAdapter && !mAdapter!!.getData().isEmpty()) {
+            removeCallbacks(mLoopRunnable)
             postDelayed(mLoopRunnable, mDuration)
         } else {
-            removeCallbacks(mLoopRunnable)
+            stop()
         }
     }
 
-    fun setBannerClickListener(listener: BaseQuickAdapter.OnItemChildClickListener) {
-        mBannerClickListener = listener
-        val adapter = mBannerViewPager.adapter
-        internalSetClickListener(adapter)
-    }
-
-    private fun internalSetClickListener(adapter: RecyclerView.Adapter<*>?) {
-        if (null == mBannerClickListener) {
-            return
-        }
-        when (adapter) {
-            is BaseQuickAdapter<*, *> -> {
-                adapter.onItemChildClickListener = mBannerClickListener
-            }
-        }
+    fun stop() {
+        Log.d(sTAG, "stop")
+        removeCallbacks(mLoopRunnable)
     }
 
 }
